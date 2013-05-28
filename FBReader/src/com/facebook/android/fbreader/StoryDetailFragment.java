@@ -420,9 +420,11 @@ public class StoryDetailFragment extends Fragment {
 	
 				// Copy the resource attributes into the JSONObject
 				resource.put("image", mItem.pictureLink);
-				resource.put("title", mItem.title);			
+				resource.put("title", mItem.title);	
+				String resourceUri = mItem.title.replace(" ", "_");
 				resource.put("url", 
-						"https://stark-shelf-5591.herokuapp.com/resources/posted_resource");
+						"https://stark-shelf-5591.herokuapp.com/resources/posted_resource/"
+						+ resourceUri);
 				resource.put("description", mItem.content);
 
 				// Set up object request parameters
