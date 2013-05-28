@@ -500,11 +500,8 @@ public class StoryDetailFragment extends Fragment {
 
 				// Add the request to the batch
 				requestBatch.add(actionRequest);
-				Log.i("Testing", "added action request to batch");
-
 				// Execute the batch request
 				requestBatch.executeAsync();
-				Log.i("Testing", "Batch executed");
 			} catch (JSONException e) {
 				Log.i("Publishing OG Action",
 						"JSON error "+ e.getMessage());
