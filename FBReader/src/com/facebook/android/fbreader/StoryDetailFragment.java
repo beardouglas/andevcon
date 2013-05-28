@@ -302,7 +302,7 @@ public class StoryDetailFragment extends Fragment {
     		   pendingAction = PendingAction.READ_OG;
     		   Session.NewPermissionsRequest newPermsRequest = 
     				   new Session.NewPermissionsRequest(
-    					   getActivity(),
+    					   this,
     					   Arrays.asList("friends_actions.music"));
     		   Session.getActiveSession()
     		          .requestNewReadPermissions(newPermsRequest);
@@ -400,7 +400,7 @@ public class StoryDetailFragment extends Fragment {
 	        if (!session.getPermissions().contains("publish_actions")) {
 	        		pendingAction = PendingAction.PUBLISH;
 	        		Session.NewPermissionsRequest newPermissionsRequest = new Session 
-	        				.NewPermissionsRequest(getActivity(), 
+	        				.NewPermissionsRequest(this, 
 	        						Arrays.asList("publish_actions"));
 	        		session.requestNewPublishPermissions(newPermissionsRequest);
 	        		return;
