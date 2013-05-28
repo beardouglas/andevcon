@@ -70,9 +70,7 @@ public class StoryDetailFragment extends Fragment {
     
     private void onSessionStateChange(Session session, SessionState state,
 			Exception exception) {
-    	     Log.i("Testing", "Session state changed");
     	     if (state == SessionState.OPENED_TOKEN_UPDATED) {
-    	    	 Log.i("Testing", "Handle action being called");
             handlePendingAction();
         }
 	} 
@@ -413,7 +411,6 @@ public class StoryDetailFragment extends Fragment {
 	                getActivity().getResources().getString(R.string.progress_dialog_text), true);
 
 		    try {
-		    	Log.i("Testing", "we will create the batch request");
 				// Create a batch request, firstly to post a new object and
 				// secondly to publish the action with the new object's id.
 				RequestBatch requestBatch = new RequestBatch();
@@ -538,11 +535,9 @@ public class StoryDetailFragment extends Fragment {
 
        switch (previouslyPendingAction) {
            case READ_OG:
-        	   Log.i("Testing", "Fetching android friends music");
                getAndroidFriends();
                break;
            case PUBLISH:
-        	   Log.i("Testing", "publishing OG story");
                publishOpenGraphStory(mItem);
                break;
        }
