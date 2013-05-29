@@ -71,7 +71,6 @@ public class StoryDetailFragment extends Fragment {
     
     private void onSessionStateChange(Session session, SessionState state,
 			Exception exception) {
-    	Log.i(TAG, "onSessionStateChange");
     	     if (state == SessionState.OPENED_TOKEN_UPDATED) {
             handlePendingAction();
         }
@@ -84,7 +83,6 @@ public class StoryDetailFragment extends Fragment {
 	private enum PendingAction {
 		NONE,
 		READ_OG_MUSIC,
-		READ_OG_RESOURCE,
 		PUBLISH
 	}
 
@@ -326,27 +324,9 @@ public class StoryDetailFragment extends Fragment {
      * for the app's actions
      */
     private void getOGData() {
-    		if (Session.getActiveSession().getPermissions()
-    			  .contains("friends_actions:resourcebrowser")) {
-    			getAppUsers();
-      	} else {
-      		pendingAction = PendingAction.READ_OG_RESOURCE;
-      		Session.NewPermissionsRequest newPermsRequest = 
-      				   new Session.NewPermissionsRequest(
-      					   this,
-      					   Arrays.asList("friends_actions:resourcebrowser"));
-      		Session.getActiveSession()
-      		          .requestNewReadPermissions(newPermsRequest);
-      	}
-    }
-    
-    /*
-     * Helper method to query for app users
-     */
-    private void getAppUsers() {
     		// Get friends using app through an FQL query
 		String fqlQuery = "SELECT uid, name FROM user WHERE uid IN " +
-        "(SELECT uid2 FROM friend WHERE uid1 = me() LIMIT 25)" +
+        "(SELECT uid2 FROM friend WHERE uid1 = me())" +
         "AND is_app_user = 1";
 		Bundle params = new Bundle();
 		params.putString("q", fqlQuery);
@@ -374,7 +354,7 @@ public class StoryDetailFragment extends Fragment {
     private void requestOpenGraphData(GraphObjectList<MyGraphFQLResult> friends) {
 		RequestBatch requestBatch = new RequestBatch();
 		for (MyGraphFQLResult friend : friends) {
-			Request musicRequest = Request.newGraphPathRequest(
+			Request ogDataRequest = Request.newGraphPathRequest(
             		Session.getActiveSession(), 
             		friend.getUid()+"/resourcebrowser:browse", 
                 new Request.Callback() {
@@ -388,7 +368,7 @@ public class StoryDetailFragment extends Fragment {
             	        	 }
             	        }
                 });
-            requestBatch.add(musicRequest);
+            requestBatch.add(ogDataRequest);
 		}
 		requestBatch.executeAsync();
 	}
@@ -698,9 +678,8 @@ public class StoryDetailFragment extends Fragment {
 			// --------------------------------------------
 			Bundle actionParams = new Bundle();
 			
-			// Assign the article to the URL. This only works
-			// if the og:type of the website is "article"
-			actionParams.putString("article", mItem.url);
+			// Assign the resource to a sample Open Graph web page
+			actionParams.putString("resource", "http://samples.ogp.me/584754164903192");
 			
 			// Turn on the explicit share flag
 			//actionParams.putString("fb:explicitly_shared", "true");
@@ -770,9 +749,6 @@ public class StoryDetailFragment extends Fragment {
            case READ_OG_MUSIC:
                getAndroidFriends();
                break;
-           case READ_OG_RESOURCE:
-               getAppUsers();
-               break;
            case PUBLISH:
                shareOGStory(mItem);
                break;
@@ -801,7 +777,6 @@ public class StoryDetailFragment extends Fragment {
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        Log.i(TAG, "onActivityResult");
         uiHelper.onActivityResult(requestCode, resultCode, data);
     }
     
