@@ -1,17 +1,13 @@
 package com.facebook.android.fbreader;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -33,6 +29,8 @@ import com.facebook.Session;
 import com.facebook.SessionState;
 import com.facebook.UiLifecycleHelper;
 import com.facebook.android.fbreader.dummy.DummyContent;
+import com.facebook.model.GraphObject;
+import com.facebook.model.GraphObjectList;
 import com.facebook.widget.WebDialog;
 import com.facebook.widget.WebDialog.OnCompleteListener;
 
@@ -50,12 +48,15 @@ import com.facebook.widget.WebDialog.OnCompleteListener;
 
 public class StoryDetailFragment extends Fragment {
 
+	private static final String TAG = "StoryDetailFragment";
+	
     public static final String ARG_ITEM_ID = "item_id";
 
     DummyContent.DummyItem mItem;
     
     private Button shareButton;
-    private Button androidFriendsButton;
+    private Button readMusicListensButton;
+    private Button readOpenGraphButton;
     private Button sendRequestsButton;
     private Button publishButton;
     private ProgressDialog progressDialog;
@@ -70,6 +71,7 @@ public class StoryDetailFragment extends Fragment {
     
     private void onSessionStateChange(Session session, SessionState state,
 			Exception exception) {
+    	Log.i(TAG, "onSessionStateChange");
     	     if (state == SessionState.OPENED_TOKEN_UPDATED) {
             handlePendingAction();
         }
@@ -81,7 +83,8 @@ public class StoryDetailFragment extends Fragment {
 	
 	private enum PendingAction {
 		NONE,
-		READ_OG,
+		READ_OG_MUSIC,
+		READ_OG_RESOURCE,
 		PUBLISH
 	}
 
@@ -139,13 +142,29 @@ public class StoryDetailFragment extends Fragment {
 				}
 			});
         	   
-        	   androidFriendsButton = ((Button) rootView.findViewById(R.id.androidFriendsButton));
-        	   androidFriendsButton.setOnClickListener(new View.OnClickListener() {
+       	   readMusicListensButton = ((Button) rootView.findViewById(R.id.readMusicListensButton));
+       	   readMusicListensButton.setOnClickListener(new View.OnClickListener() {
 				
 				@Override
 				public void onClick(View v) {
 					if (Session.getActiveSession().isOpened()) {
 						getMusic();
+					} else {
+						Toast.makeText(getActivity(), 
+								"You must log in to get friend information", 
+								Toast.LENGTH_SHORT)
+								.show();
+					}
+				}
+		   });
+        	   
+        	   readOpenGraphButton = ((Button) rootView.findViewById(R.id.readOpenGraphButton));
+        	   readOpenGraphButton.setOnClickListener(new View.OnClickListener() {
+				
+				@Override
+				public void onClick(View v) {
+					if (Session.getActiveSession().isOpened()) {
+						getOGData();
 					} else {
 						Toast.makeText(getActivity(), 
 								"You must log in to get friend information", 
@@ -292,6 +311,88 @@ public class StoryDetailFragment extends Fragment {
     	
     }
    
+    /*
+     * Interface to make parsing FQL query results easy
+     */
+	private interface MyGraphFQLResult extends GraphObject {
+	    // Getter for the ID field
+	    String getUid();
+	    // Getter for the Name field
+	    String getName();
+	}
+	
+    /*
+     * Helper method to get Open Graph data
+     * for the app's actions
+     */
+    private void getOGData() {
+    		if (Session.getActiveSession().getPermissions()
+    			  .contains("friends_actions:resourcebrowser")) {
+    			getAppUsers();
+      	} else {
+      		pendingAction = PendingAction.READ_OG_RESOURCE;
+      		Session.NewPermissionsRequest newPermsRequest = 
+      				   new Session.NewPermissionsRequest(
+      					   this,
+      					   Arrays.asList("friends_actions:resourcebrowser"));
+      		Session.getActiveSession()
+      		          .requestNewReadPermissions(newPermsRequest);
+      	}
+    }
+    
+    /*
+     * Helper method to query for app users
+     */
+    private void getAppUsers() {
+    		// Get friends using app through an FQL query
+		String fqlQuery = "SELECT uid, name FROM user WHERE uid IN " +
+        "(SELECT uid2 FROM friend WHERE uid1 = me() LIMIT 25)" +
+        "AND is_app_user = 1";
+		Bundle params = new Bundle();
+		params.putString("q", fqlQuery);
+		Request request = new Request(Session.getActiveSession(), "/fql", params, HttpMethod.GET, 
+				new Request.Callback() {
+			@Override
+			public void onCompleted(Response response) {
+				// Get the array of data returned
+				JSONArray dataArray = (JSONArray) response.getGraphObject().getProperty("data");
+				if (dataArray.length() > 0) {
+					// Cast this into a defined interface representing the response
+					GraphObjectList<MyGraphFQLResult> result = GraphObject.Factory.createList(dataArray, MyGraphFQLResult.class);
+					requestOpenGraphData(result);
+				}
+			}
+		}); 
+		// Execute the request
+		request.executeAsync();
+    }
+    
+    /*
+     * Method that makes the request for Open Graph data
+     * for the app based on given user ids.
+     */
+    private void requestOpenGraphData(GraphObjectList<MyGraphFQLResult> friends) {
+		RequestBatch requestBatch = new RequestBatch();
+		for (MyGraphFQLResult friend : friends) {
+			Request musicRequest = Request.newGraphPathRequest(
+            		Session.getActiveSession(), 
+            		friend.getUid()+"/resourcebrowser:browse", 
+                new Request.Callback() {
+                    
+            	        public void onCompleted(Response response) {
+            	        	 FacebookRequestError error = response.getError();
+            	        	 if (error != null) {
+            	        		Log.i(TAG, error.getErrorMessage());
+            	        	 } else {
+            	        		Log.i(TAG, response.toString());
+            	        	 }
+            	        }
+                });
+            requestBatch.add(musicRequest);
+		}
+		requestBatch.executeAsync();
+	}
+    
     // Asking for friends' music activity requires new
     // permissions. Ask for them in context!
     private void getMusic() {
@@ -299,7 +400,7 @@ public class StoryDetailFragment extends Fragment {
   			  .contains("friends_actions.music")) {
     		   getAndroidFriends();
     	   } else {
-    		   pendingAction = PendingAction.READ_OG;
+    		   pendingAction = PendingAction.READ_OG_MUSIC;
     		   Session.NewPermissionsRequest newPermsRequest = 
     				   new Session.NewPermissionsRequest(
     					   this,
@@ -313,9 +414,9 @@ public class StoryDetailFragment extends Fragment {
     // tables to return a list of friends that only
     // includes people using at least one Android
     // device, alphabetized by name
-   private void getAndroidFriends() {
-    	      String fqlQuery = "SELECT uid, devices FROM user WHERE uid IN" + 
-                  "(SELECT uid2 FROM friend WHERE uid1 = me() LIMIT 100) " +
+    private void getAndroidFriends() {
+    	      String fqlQuery = "SELECT uid, name FROM user WHERE uid IN" + 
+                  "(SELECT uid2 FROM friend WHERE uid1 = me() LIMIT 10) " +
                   "AND \"Android\" IN devices " +
                   "ORDER BY name";
           Bundle params = new Bundle();
@@ -332,67 +433,53 @@ public class StoryDetailFragment extends Fragment {
               HttpMethod.GET,                 
               new Request.Callback(){         
                   public void onCompleted(Response response) {
-                      if (response!=null) {
-                    	     // if this call returned friends,
-                    	     // parse the response for UIDs
-                    	     ArrayList<String> androidIds = getIdsFromResponse(response);
-                    	     requestFriendDataFromIds(androidIds);
-                      }
+                	  	// Get the array of data returned
+      				JSONArray dataArray = (JSONArray) response.getGraphObject().getProperty("data");
+      				if (dataArray.length() > 0) {
+      					// Cast this into a defined interface representing the response
+      					GraphObjectList<MyGraphFQLResult> result = GraphObject.Factory.createList(dataArray, MyGraphFQLResult.class);
+      					requestOpenGraphMusicListens(result);
+      				}
                   }                  
           }); 
           request.executeAsync();
          
     }
-    
-    // Pull uids from response data. Quick and dirty,
-    // a proper implementation should probably model
-    // the response
-    private ArrayList<String> getIdsFromResponse(Response response) {
-    	     int uidStart;
-    	     int uidEnd;
-    	     Log.i("Response was", response.toString());
-    	     String responseText = response.toString();
-    	     ArrayList<String>androidIds = new ArrayList<String>();
-    	     for (int i=0; i<responseText.length(); i++) {
-    	    	      uidStart = responseText.indexOf("uid", i) + 5;
-    	    	      uidEnd = responseText.indexOf("}", uidStart);
-    	    	      String id = responseText.substring(uidStart, uidEnd);
-    	    	      if (!androidIds.contains(id)) {
-    	    	         androidIds.add(id);
-    	    	      }
-    	     }
-    	     return androidIds;
-    }
-    
+       
     // Get the latest song each friend using an Android
     // device listened to
-    private void requestFriendDataFromIds(ArrayList<String> androidIds) {
-    	   if (Session.getActiveSession().getPermissions()
-  			  .contains("friends_actions.music")) {
-    		   
-    	     RequestBatch requestBatch = new RequestBatch();
- 
-         for (String id : androidIds) {
-            Request musicRequest = Request.newGraphPathRequest(
-            		Session.getActiveSession(), 
-                id+"/music.listens", 
-                new Request.Callback() {
-                    
-            	        public void onCompleted(Response response) {
-            	        	  if (response != null) {
-            	        	    Log.i("Story Detail Music", response.toString());
-            	        	  }
-            	        }
-                });
-            requestBatch.add(musicRequest);
-         }
-   
-         requestBatch.executeAsync();	
-    	  }
+    private void requestOpenGraphMusicListens(GraphObjectList<MyGraphFQLResult> friends) {
+    		RequestBatch requestBatch = new RequestBatch();
+    		for (MyGraphFQLResult friend : friends) {
+    			Request musicRequest = Request.newGraphPathRequest(
+                		Session.getActiveSession(), 
+                		friend.getUid()+"/music.listens", 
+                    new Request.Callback() {
+                        
+                	        public void onCompleted(Response response) {
+                	        	 FacebookRequestError error = response.getError();
+                	        	 if (error != null) {
+                	        		Log.i(TAG, error.getErrorMessage());
+                	        	 } else {
+                	        		Log.i(TAG, response.toString());
+                	        	 }
+                	        }
+                    });
+                requestBatch.add(musicRequest);
+    		}
+    		requestBatch.executeAsync();
     }
     
-//    private void shareOGStoryUserOwned(DummyContent.DummyItem mItem){
     private void shareOGStory(DummyContent.DummyItem mItem){
+    	    shareOGStoryUserOwned(mItem);
+//    	    shareOGStoryAppOwned(mItem);
+//    	    shareOGStorySelfHostedObject(mItem);
+    }
+    
+    /*
+     * Share an Open Graph story after creating an object
+     */
+    private void shareOGStoryUserOwned(DummyContent.DummyItem mItem){
  	   Session session = Session.getActiveSession();
  	    if (session != null) {
  		    // Check for publish permissions 
@@ -438,7 +525,7 @@ public class StoryDetailFragment extends Fragment {
  						FacebookRequestError error = response.getError();
  						if (error != null) {
  							dismissProgressDialog();
- 							Log.i("Publishing OG Action", error.getErrorMessage());
+ 							Log.i(TAG, error.getErrorMessage());
  						}
  					}
  			    };
@@ -511,7 +598,10 @@ public class StoryDetailFragment extends Fragment {
  		}
  	}
     
-//    private void shareOGStory(DummyContent.DummyItem mItem){
+    /*
+     * Share an Open Graph story, using an App-Owned object
+     * that has been previously created
+     */
     private void shareOGStoryAppOwned(DummyContent.DummyItem mItem){
 		Session session = Session.getActiveSession();
 		
@@ -582,7 +672,10 @@ public class StoryDetailFragment extends Fragment {
 		
     }
     
-//    private void shareOGStory(DummyContent.DummyItem mItem){
+    /*
+     * Share an Open Graph story using an object represented
+     * by a website with Open Graph tags.
+     */
     private void shareOGStorySelfHostedObject(DummyContent.DummyItem mItem){
 		Session session = Session.getActiveSession();
 		
@@ -674,8 +767,11 @@ public class StoryDetailFragment extends Fragment {
        pendingAction = PendingAction.NONE;
 
        switch (previouslyPendingAction) {
-           case READ_OG:
+           case READ_OG_MUSIC:
                getAndroidFriends();
+               break;
+           case READ_OG_RESOURCE:
+               getAppUsers();
                break;
            case PUBLISH:
                shareOGStory(mItem);
@@ -705,6 +801,7 @@ public class StoryDetailFragment extends Fragment {
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        Log.i(TAG, "onActivityResult");
         uiHelper.onActivityResult(requestCode, resultCode, data);
     }
     
