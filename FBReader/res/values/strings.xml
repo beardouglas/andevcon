@@ -5,7 +5,8 @@
     <string name="title_story_list">Facebook Resources</string>
     <string name="share">Share</string>
     <string name="publish">Share OG</string>
-    <string name="androidFriends">Latest listens on Android</string>
+    <string name="readOpenGraph">Read OG</string>
+    <string name="readMusicListens">Read Music Listens Android</string>
     <string name="sendRequests">Invite a friend</string>
     <string name="progress_dialog_text">Sharing story, please wait...</string>
     <string name="error_dialog_title">Error</string>
